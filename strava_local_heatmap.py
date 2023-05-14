@@ -22,6 +22,7 @@
 import os
 import glob
 import time
+from xml.dom import minidom
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -111,34 +112,33 @@ def main(args: Namespace) -> None:
                                          args.filter))
 
     if not gpx_files:
-        exit('ERROR no data matching {}/{}'.format(args.dir,
+        exit('ERROR(1) no data matching {}/{}'.format(args.dir,
                                                    args.filter))
 
     lat_lon_data = []
 
     for gpx_file in gpx_files:
         print('Reading {}'.format(os.path.basename(gpx_file)))
-
-        with open(gpx_file, encoding='utf-8') as file:
-            for line in file:
-                if '<time' in line:
-                    l = line.split('>')[1][:4]
-
-                    if not args.year or l in args.year:
-                        for line in file:
-                            if '<trkpt' in line:
-                                l = line.split('"')
-
-                                lat_lon_data.append([float(l[1]),
-                                                     float(l[3])])
-
-                    else:
-                        break
+        
+        doc = minidom.parse(gpx_file)
+        if gpx_file[-3:].upper()=='KML':
+            coordinates = doc.getElementsByTagName('coordinates')[0].firstChild.data
+            for element in coordinates.split():
+                lat=float(element.split(',')[0])
+                lon=float(element.split(',')[1])
+                lat_lon_data.append([lat,lon])
+                
+        elif gpx_file[-3:].upper()=='GPX':
+            track = doc.getElementsByTagName("trkpt")
+            for punto in track:
+                lat=float(punto.getAttribute("lat"))
+                lon=float(punto.getAttribute("lon"))
+                lat_lon_data.append([lat,lon])
 
     lat_lon_data = np.array(lat_lon_data)
 
     if lat_lon_data.size == 0:
-        exit('ERROR no data matching {}/{}{}'.format(args.dir,
+        exit('ERROR(2) no data matching {}/{}{}'.format(args.dir,
                                                      args.filter,
                                                      ' with year {}'.format(' '.join(args.year)) if args.year else ''))
 
@@ -151,7 +151,7 @@ def main(args: Namespace) -> None:
                                                lat_lon_data[:, 1] < lon_bound_max), :]
 
     if lat_lon_data.size == 0:
-        exit('ERROR no data matching {}/{} with bounds {}'.format(args.dir, args.filter, args.bounds))
+        exit('ERROR(3) no data matching {}/{} with bounds {}'.format(args.dir, args.filter, args.bounds))
 
     print('Read {} trackpoints'.format(lat_lon_data.shape[0]))
 
